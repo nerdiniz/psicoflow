@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Plus, User, Calendar, TrendingUp, MoreVertical, MessageSquare, Mail, Calendar as CalendarIcon, X, Loader2, ClipboardList, Trash2 } from 'lucide-react';
+import { Search, Filter, Plus, User, Calendar, TrendingUp, MoreVertical, MessageSquare, Mail, Calendar as CalendarIcon, X, Loader2, ClipboardList, Trash2, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { jsPDF } from 'jspdf';
+import { generateAnamnesisPDF } from '../lib/pdfGenerator';
 import { AnamnesisModal } from '../components/AnamnesisModal';
 
 export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
@@ -14,13 +16,31 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [isAnamnesisOpen, setIsAnamnesisOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [profile, setProfile] = useState<{ name: string; crp: string } | null>(null);
 
   const lastHandledId = useRef<string | null>(null);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
 
   useEffect(() => {
-    if (user) fetchPatients();
+    if (user) {
+      fetchPatients();
+      fetchProfile();
+    }
   }, [user]);
+
+  async function fetchProfile() {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('name, crp')
+        .eq('id', user?.id)
+        .single();
+      if (error) throw error;
+      setProfile(data);
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+    }
+  }
 
   useEffect(() => {
     if (patientId && patients.length > 0 && lastHandledId.current !== patientId) {
@@ -100,6 +120,19 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
           <button className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-medium shadow-sm">
             <Filter size={18} />
             Filtros
+          </button>
+          <button
+            onClick={() => generateAnamnesisPDF({
+              patientName: '',
+              data: {},
+              isBlank: true,
+              psychologistName: profile?.name || user?.user_metadata?.name,
+              crp: profile?.crp
+            })}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-medium shadow-sm"
+          >
+            <FileText size={18} />
+            Anamnese em Branco
           </button>
           <button
             onClick={() => setIsModalOpen(true)}

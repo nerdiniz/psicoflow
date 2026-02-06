@@ -12,6 +12,10 @@ import {
   Plus
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { Loader2 } from 'lucide-react';
 
 interface DashboardProps {
   onViewChange: (view: View) => void;
@@ -19,7 +23,78 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
   const { user } = useAuth();
+  const [loading, setLoading] = React.useState(true);
+  const [stats, setStats] = React.useState({
+    totalPatients: 0,
+    sessionsThisWeek: 0,
+    monthlyRevenue: 0,
+    todayAppointments: [] as any[]
+  });
+
   const userName = user?.user_metadata?.name || 'Profissional';
+
+  React.useEffect(() => {
+    if (user) fetchDashboardData();
+  }, [user]);
+
+  async function fetchDashboardData() {
+    try {
+      setLoading(true);
+
+      // 1. Total Patients
+      const { count: patientCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true });
+
+      // 2. Sessions this week
+      const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+      const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+      const { count: sessionCount } = await supabase
+        .from('appointments')
+        .select('*', { count: 'exact', head: true })
+        .gte('date', weekStart)
+        .lte('date', weekEnd)
+        .neq('status', 'cancelado');
+
+      // 3. Monthly Revenue
+      const monthStart = startOfMonth(new Date()).toISOString();
+      const monthEnd = endOfMonth(new Date()).toISOString();
+      const { data: payments } = await supabase
+        .from('payments')
+        .select('amount')
+        .gte('date', monthStart)
+        .lte('date', monthEnd)
+        .eq('status', 'pago');
+
+      const revenue = payments?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+
+      // 4. Today's Appointments
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const { data: todayApps } = await supabase
+        .from('appointments')
+        .select('*, patients(name)')
+        .gte('date', todayStart.toISOString())
+        .lte('date', todayEnd.toISOString())
+        .neq('status', 'cancelado')
+        .order('date', { ascending: true });
+
+      setStats({
+        totalPatients: patientCount || 0,
+        sessionsThisWeek: sessionCount || 0,
+        monthlyRevenue: revenue,
+        todayAppointments: todayApps || []
+      });
+
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -33,7 +108,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           title="Total de Pacientes"
-          value="--"
+          value={loading ? '...' : stats.totalPatients.toString()}
           trend="Dados reais"
           trendColor="bg-blue-100/50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
           icon={<Users size={24} />}
@@ -41,16 +116,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
         />
         <StatCard
           title="Sessões na Semana"
-          value="--"
-          subValue="Aguardando consultas"
+          value={loading ? '...' : stats.sessionsThisWeek.toString()}
+          subValue="Consultas agendadas"
           icon={<Flower size={24} />}
           iconBg="bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
         />
         <StatCard
           title="Faturamento Mensal"
-          value="R$ 0,00"
-          trend="Sem variação"
-          trendColor="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400"
+          value={loading ? '...' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(stats.monthlyRevenue)}
+          trend="Mês atual"
+          trendColor="bg-green-100/50 text-green-700 dark:bg-green-900/30 dark:text-green-400"
           icon={<DollarSign size={24} />}
           iconBg="bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400"
           trendIcon={<TrendingUp size={14} className="mr-1" />}
@@ -62,7 +137,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
 
         {/* Empty Agenda State */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden min-h-[400px]">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 <CalendarCheck className="text-emerald-500" size={20} />
@@ -70,21 +145,46 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
               </h2>
             </div>
 
-            <div className="p-12 text-center">
-              <div className="w-16 h-16 bg-gray-50 dark:bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
-                <CalendarCheck size={32} />
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center p-20">
+                <Loader2 className="animate-spin text-primary-500" size={40} />
               </div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">Nenhuma consulta hoje</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px] mx-auto">
-                Sua agenda está livre. Aproveite para organizar seus prontuários.
-              </p>
-              <button
-                onClick={() => onViewChange('agenda')}
-                className="mt-6 text-sm font-bold text-emerald-600 hover:text-emerald-700 flex items-center justify-center gap-2 mx-auto"
-              >
-                <Plus size={16} /> Agendar Sessão
-              </button>
-            </div>
+            ) : stats.todayAppointments.length === 0 ? (
+              <div className="p-12 text-center h-full flex flex-col justify-center">
+                <div className="w-16 h-16 bg-gray-50 dark:bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                  <CalendarCheck size={32} />
+                </div>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">Nenhuma consulta hoje</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 max-w-[200px] mx-auto">
+                  Sua agenda está livre. Aproveite para organizar seus prontuários.
+                </p>
+                <button
+                  onClick={() => onViewChange('agenda')}
+                  className="mt-6 text-sm font-bold text-emerald-600 hover:text-emerald-700 flex items-center justify-center gap-2 mx-auto"
+                >
+                  <Plus size={16} /> Agendar Sessão
+                </button>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 dark:divide-gray-700">
+                {stats.todayAppointments.map((app) => (
+                  <AppointmentItem
+                    key={app.id}
+                    time={format(new Date(app.date), 'HH:mm')}
+                    name={app.patients?.name || 'Paciente'}
+                    type={app.type === 'online' ? 'Sessão Online' : 'Sessão Presencial'}
+                    status={app.status}
+                    statusColor={
+                      app.status === 'realizado' ? "bg-green-100 text-green-700" :
+                        app.status === 'agendado' ? "bg-blue-100 text-blue-700" :
+                          "bg-gray-100 text-gray-700"
+                    }
+                    day={format(new Date(app.date), 'dd')}
+                    dayName={format(new Date(app.date), 'EEE', { locale: ptBR })}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

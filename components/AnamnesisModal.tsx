@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, ClipboardList, User, MessageCircle, History, Stethoscope, Wine, Users, Milestone, Activity, Eye, Target, Loader2 } from 'lucide-react';
+import { X, Save, ClipboardList, User, MessageCircle, History, Stethoscope, Wine, Users, Milestone, Activity, Eye, Target, Loader2, FileText } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { generateAnamnesisPDF } from '../lib/pdfGenerator';
 
 interface AnamnesisModalProps {
     isOpen: boolean;
@@ -28,12 +29,32 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
     const [formData, setFormData] = useState<any>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [profile, setProfile] = useState<{ name: string; crp: string } | null>(null);
 
     useEffect(() => {
         if (isOpen && patientId) {
             fetchAnamnesis();
+            fetchProfile();
         }
     }, [isOpen, patientId]);
+
+    async function fetchProfile() {
+        try {
+            // Get user_id from anamnesis search or auth
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('name, crp')
+                .eq('id', user.id)
+                .single();
+            if (error) throw error;
+            setProfile(data);
+        } catch (err) {
+            console.error('Error fetching profile:', err);
+        }
+    }
 
     async function fetchAnamnesis() {
         try {
@@ -98,6 +119,18 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
                     </div>
                     <div className="flex items-center gap-3">
                         <button
+                            onClick={() => generateAnamnesisPDF({
+                                patientName,
+                                data: formData,
+                                psychologistName: profile?.name,
+                                crp: profile?.crp
+                            })}
+                            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-bold shadow-sm"
+                        >
+                            <FileText size={18} className="text-primary-500" />
+                            Gerar PDF
+                        </button>
+                        <button
                             onClick={onClose}
                             className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
                         >
@@ -116,8 +149,8 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
                                     key={section.id}
                                     onClick={() => setActiveSection(section.id)}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeSection === section.id
-                                            ? 'bg-primary-500 text-white shadow-md'
-                                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                        ? 'bg-primary-500 text-white shadow-md'
+                                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                                         }`}
                                 >
                                     {section.icon}
