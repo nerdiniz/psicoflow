@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, isSameDay, addMonths, subMonths, startOfDay, endOfDay, eachDayOfInterval, addDays } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format, isSameDay, addMonths, subMonths, startOfDay, endOfDay, eachDayOfInterval, addDays, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Loader2 } from 'lucide-react';
 
@@ -99,10 +99,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
             )
         `)
         .gte('date', monthStart)
-        .lte('date', monthEnd)
-        .neq('status', 'cancelado');
+        .lte('date', monthEnd);
 
-      const processedApps = monthApps?.map(app => {
+      if (monthApps && monthApps.length > 0) {
+        const now = new Date();
+        const needsAutoUpdate = monthApps.filter(a => a.status === 'agendado' && new Date(a.date) < now);
+        if (needsAutoUpdate.length > 0) {
+          const ids = needsAutoUpdate.map(a => a.id);
+          await supabase.from('appointments').update({ status: 'realizado' }).in('id', ids);
+          monthApps.forEach(a => {
+            if (ids.includes(a.id)) a.status = 'realizado';
+          });
+        }
+      }
+
+      const processedApps = (monthApps || []).filter(app => app.status !== 'cancelado').map(app => {
         const patient = app.patients as any;
         let value = 0;
         if (patient) {
@@ -143,10 +154,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ onViewChange }) => {
           days.forEach(date => {
             if (date.getDay() === slotDayOfWeek) {
               const dateStr = format(date, 'yyyy-MM-dd');
-              const isOverridden = processedApps.some(app => {
+              const isOverridden = monthApps?.some(app => {
                 const appDate = new Date(app.date);
-                return format(appDate, 'yyyy-MM-dd') === dateStr &&
-                  format(appDate, 'HH:mm') === slotTime;
+                if (format(appDate, 'yyyy-MM-dd') !== dateStr) return false;
+
+                const appTime = format(appDate, 'HH:mm');
+                if (appTime === slotTime) return true;
+
+                // Handle legacy/corrupted timezone shift (+3h)
+                return format(addHours(appDate, 3), 'HH:mm') === slotTime;
               });
 
               if (!isOverridden) {

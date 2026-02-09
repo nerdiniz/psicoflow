@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { IMAGES } from '../types';
-import { Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, Brain } from 'lucide-react';
 
 export const Login = () => {
     const [isSignUp, setIsSignUp] = useState(false);
@@ -50,8 +50,8 @@ export const Login = () => {
             <div className="w-full max-w-md bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden animate-fade-in">
                 <div className="p-10">
                     <div className="flex justify-center mb-8">
-                        <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg border-2 border-white">
-                            <img src={IMAGES.LOGO} alt="PsicoFlow" className="w-full h-full object-cover" />
+                        <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center shadow-lg border-2 border-white flex-shrink-0">
+                            <Brain className="text-emerald-600 dark:text-emerald-400" size={32} />
                         </div>
                     </div>
 

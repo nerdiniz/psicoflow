@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Loader2, X, Clock, Trash2, User, Calendar as CalendarIcon, List, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { format, startOfWeek, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, subWeeks, addWeeks, parseISO, isToday } from 'date-fns';
+import { format, startOfWeek, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, subWeeks, addWeeks, parseISO, isToday, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 8:00 to 20:00
@@ -57,8 +57,22 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
       if (appRes.error) throw appRes.error;
       if (patientsRes.error) throw patientsRes.error;
 
+      const appData = (appRes.data || []).filter(a => a.status !== 'cancelado');
+      const now = new Date();
+
+      // Auto-update past appointments to 'realizado'
+      const needsAutoUpdate = appData.filter(a => a.status === 'agendado' && new Date(a.date) < now);
+      if (needsAutoUpdate.length > 0) {
+        const ids = needsAutoUpdate.map(a => a.id);
+        await supabase.from('appointments').update({ status: 'realizado' }).in('id', ids);
+        // Just update local state for immediate feedback without another fetch
+        appData.forEach(a => {
+          if (ids.includes(a.id)) a.status = 'realizado';
+        });
+      }
+
       setSlots(slotsRes.data || []);
-      setAppointments((appRes.data || []).filter(a => a.status !== 'cancelado'));
+      setAppointments(appData);
       setPatients(patientsRes.data || []);
     } catch (err) {
       console.error('Error fetching agenda data:', err);
@@ -189,7 +203,13 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
     const timeStr = hour !== undefined ? hour.toString().padStart(2, '0') + ':00' : null;
 
     const dayAppointments = appointments.filter(a => isSameDay(parseISO(a.date), date));
-    const specificApp = timeStr ? dayAppointments.find(a => format(parseISO(a.date), 'HH:mm') === timeStr.substring(0, 5)) : null;
+    const specificApp = timeStr ? dayAppointments.find(a => {
+      const appTime = format(parseISO(a.date), 'HH:mm');
+      if (appTime === timeStr.substring(0, 5)) return true;
+      // Handle legacy/corrupted timezone shift (saved as UTC 8h instead of local 8h)
+      const shiftedTime = format(addHours(parseISO(a.date), 3), 'HH:mm');
+      return shiftedTime === timeStr.substring(0, 5);
+    }) : null;
     const recurringSlot = timeStr ? slots.find(s => s.day_of_week === dayOfWeek && s.start_time.startsWith(timeStr)) : null;
 
     const allItems = [...dayAppointments];
@@ -248,7 +268,9 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
                       setIsModalOpen(true);
                     })()}
                     className={`h-24 md:h-32 rounded-2xl md:rounded-3xl border-2 transition-all p-2 md:p-4 flex flex-col justify-between relative group overflow-hidden ${data
-                      ? 'bg-white dark:bg-gray-800 shadow-md border-transparent ring-1 ring-black/5 dark:ring-white/10 cursor-move'
+                      ? (specificApp?.status === 'realizado'
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20 shadow-md border-emerald-100 dark:border-emerald-800/50 cursor-move'
+                        : 'bg-white dark:bg-gray-800 shadow-md border-transparent ring-1 ring-black/5 dark:ring-white/10 cursor-move')
                       : 'border-dashed border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 cursor-pointer'
                       }`}
                   >
@@ -256,7 +278,9 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
                       <>
                         <div className="flex items-start justify-between gap-2 overflow-hidden">
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-black text-gray-900 dark:text-white uppercase tracking-tight truncate">{data.patients?.name}</p>
+                            <p className={`text-xs font-black uppercase tracking-tight truncate ${specificApp?.status === 'realizado' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>
+                              {data.patients?.name}
+                            </p>
                             <div className="flex items-center gap-1 mt-1">
                               {specificApp ? (
                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase truncate max-w-full ${specificApp.status === 'cancelado' ? 'bg-red-100 text-red-600' :
@@ -279,7 +303,10 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
                               <>
                                 <button
                                   onClick={(e) => {
-                                    e.stopPropagation(); handleFinalizeRecurring(recurringSlot, day.toISOString().substring(0, 11) + hour.toString().padStart(2, '0') + ':00:00', 'realizado');
+                                    e.stopPropagation();
+                                    const d = new Date(day);
+                                    d.setHours(hour, 0, 0, 0);
+                                    handleFinalizeRecurring(recurringSlot, d.toISOString(), 'realizado');
                                   }}
                                   className="p-1 text-emerald-500 hover:bg-emerald-50 rounded"
                                   title="Marcar como Realizado"
@@ -288,7 +315,10 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
                                 </button>
                                 <button
                                   onClick={(e) => {
-                                    e.stopPropagation(); handleFinalizeRecurring(recurringSlot, day.toISOString().substring(0, 11) + hour.toString().padStart(2, '0') + ':00:00', 'cancelado');
+                                    e.stopPropagation();
+                                    const d = new Date(day);
+                                    d.setHours(hour, 0, 0, 0);
+                                    handleFinalizeRecurring(recurringSlot, d.toISOString(), 'cancelado');
                                   }}
                                   className="p-1 text-red-400 hover:bg-red-50 rounded"
                                   title="Marcar como Falta"
@@ -302,11 +332,11 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
                         </div>
 
                         <div className="mt-2 space-y-1">
-                          <div className="h-5 bg-primary-500 rounded-xl flex items-center px-2 shadow-sm shadow-primary-500/10 overflow-hidden">
+                          <div className={`h-5 rounded-xl flex items-center px-2 shadow-sm overflow-hidden ${specificApp?.status === 'realizado' ? 'bg-emerald-600 shadow-emerald-500/10' : 'bg-primary-500 shadow-primary-500/10'}`}>
                             <span className="text-[9px] text-white font-black uppercase tracking-widest whitespace-nowrap">Sessão 50m</span>
                           </div>
-                          <div className="h-5 border border-dashed border-gray-200 dark:border-gray-700 rounded-xl flex items-center px-2 overflow-hidden">
-                            <span className="text-[9px] text-gray-400 font-bold italic truncate">Intervalo 10m</span>
+                          <div className={`h-5 border border-dashed rounded-xl flex items-center px-2 overflow-hidden ${specificApp?.status === 'realizado' ? 'border-emerald-200 dark:border-emerald-800' : 'border-gray-200 dark:border-gray-700'}`}>
+                            <span className={`text-[9px] font-bold italic truncate ${specificApp?.status === 'realizado' ? 'text-emerald-500/60' : 'text-gray-400'}`}>Intervalo 10m</span>
                           </div>
                         </div>
                       </>
@@ -522,9 +552,11 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
                 <button
                   onClick={() => {
                     if (selectedAppointment.is_recurring_projection) {
-                      const dateStr = selectedAppointment.date.split('T')[0];
-                      const timeStr = selectedAppointment.start_time || '08:00';
-                      handleFinalizeRecurring(selectedAppointment, `${dateStr}T${timeStr}`, 'realizado');
+                      const d = new Date(selectedAppointment.date);
+                      const hourMatch = (selectedAppointment.start_time || '08:00').match(/^(\d+):/);
+                      const h = hourMatch ? parseInt(hourMatch[1]) : 8;
+                      d.setHours(h, 0, 0, 0);
+                      handleFinalizeRecurring(selectedAppointment, d.toISOString(), 'realizado');
                       setSelectedAppointment(null);
                     } else {
                       handleUpdateStatus(selectedAppointment.id, 'realizado');
