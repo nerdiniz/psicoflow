@@ -1,13 +1,26 @@
 import React from 'react';
 
+export interface Plan {
+    id: string;
+    name: string;
+    value: number;
+    user_id: string;
+}
+
 export interface Patient {
     id: string;
     name: string;
     avatar: string;
     therapyType: string;
     nextSession: string;
-    status: 'Ativo' | 'Pendente' | 'Em Pausa';
+    status: 'ativo' | 'inativo' | 'alta';
     email: string;
+    phone?: string;
+    payment_type?: 'particular' | 'plano';
+    plan_id?: string;
+    custom_price?: number;
+    modality?: 'online' | 'presencial';
+    plans?: Plan; // Join result
 }
 
 export interface Appointment {

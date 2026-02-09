@@ -112,12 +112,12 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[110] p-4 lg:p-8">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl h-full max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-gray-700">
                 {/* Header */}
-                <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Anamnese Psicológica</h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">Paciente: <span className="font-semibold text-primary-600">{patientName}</span></p>
+                <div className="p-4 md:p-6 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
+                    <div className="min-w-0 flex-1">
+                        <h2 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white truncate">Anamnese</h2>
+                        <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 truncate">Paciente: <span className="font-semibold text-primary-600">{patientName}</span></p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 md:gap-3 ml-2">
                         <button
                             onClick={() => generateAnamnesisPDF({
                                 patientName,
@@ -125,18 +125,30 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
                                 psychologistName: profile?.name,
                                 crp: profile?.crp
                             })}
-                            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-bold shadow-sm"
+                            className="flex items-center gap-2 px-3 md:px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-xs md:text-sm font-bold shadow-sm"
                         >
-                            <FileText size={18} className="text-primary-500" />
-                            Gerar PDF
+                            <FileText size={16} className="text-primary-500" />
+                            <span className="hidden sm:inline">PDF</span>
                         </button>
                         <button
                             onClick={onClose}
-                            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                            className="p-1 md:p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
                         >
                             <X size={24} />
                         </button>
                     </div>
+                </div>
+
+                {/* Mobile Section Selector */}
+                <div className="md:hidden p-4 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 block">Ir para seção:</label>
+                    <select
+                        value={activeSection}
+                        onChange={(e) => setActiveSection(e.target.value)}
+                        className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-2.5 text-sm font-bold text-primary-600 outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                        {SECTIONS.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+                    </select>
                 </div>
 
                 {/* Content Body */}
@@ -161,7 +173,7 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
                     </div>
 
                     {/* Form Area */}
-                    <div className="flex-1 overflow-y-auto p-8">
+                    <div className="flex-1 overflow-y-auto p-4 md:p-8">
                         {loading ? (
                             <div className="h-full flex flex-col items-center justify-center text-gray-400">
                                 <Loader2 className="animate-spin mb-4" size={40} />
@@ -310,24 +322,24 @@ export const AnamnesisModal: React.FC<AnamnesisModalProps> = ({ isOpen, onClose,
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex items-center justify-between">
-                    <div className="text-xs text-gray-500 dark:text-gray-400 italic">
-                        Todas as alterações são salvas ao clicar em "Salvar Anamnese".
+                <div className="p-4 md:p-6 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/50 flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="text-[10px] md:text-xs text-center sm:text-left text-gray-500 dark:text-gray-400 italic">
+                        As alterações são salvas ao clicar em "Salvar Anamnese".
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex w-full sm:w-auto gap-3">
                         <button
                             onClick={onClose}
-                            className="px-6 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition-all"
+                            className="flex-1 sm:flex-none px-6 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-semibold hover:bg-gray-200 dark:hover:bg-gray-600 transition-all text-sm"
                         >
                             Cancelar
                         </button>
                         <button
                             disabled={saving || loading}
                             onClick={handleSave}
-                            className="px-8 py-2.5 bg-primary-500 text-white rounded-xl font-semibold hover:bg-primary-600 shadow-lg shadow-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                            className="flex-1 sm:flex-none px-8 py-2.5 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 shadow-lg shadow-primary-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 text-sm"
                         >
-                            {saving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-                            Salvar Anamnese
+                            {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                            Salvar
                         </button>
                     </div>
                 </div>

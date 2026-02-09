@@ -168,6 +168,22 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
     }
   }
 
+  async function handleFinalizeRecurring(slot: any, date: string, status: 'realizado' | 'cancelado') {
+    try {
+      const { error } = await supabase.from('appointments').insert([{
+        user_id: user.id,
+        patient_id: slot.patient_id,
+        date: date, // date is already ISO from getCellData/WeeklyView
+        status: status,
+        type: 'presencial' // Default for fixed slots
+      }]);
+      if (error) throw error;
+      fetchData();
+    } catch (err) {
+      console.error('Error finalizing recurring slot:', err);
+    }
+  }
+
   const getCellData = (date: Date, hour?: number) => {
     const dayOfWeek = date.getDay();
     const timeStr = hour !== undefined ? hour.toString().padStart(2, '0') + ':00' : null;
@@ -263,17 +279,23 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
                               <>
                                 <button
                                   onClick={(e) => {
-                                    e.stopPropagation(); (function () {
-                                      setFormData({ ...formData, date: format(day, 'yyyy-MM-dd'), start_time: hour.toString().padStart(2, '0') + ':00', is_recurring: false });
-                                      setIsModalOpen(true);
-                                    })();
+                                    e.stopPropagation(); handleFinalizeRecurring(recurringSlot, day.toISOString().substring(0, 11) + hour.toString().padStart(2, '0') + ':00:00', 'realizado');
                                   }}
-                                  className="p-1 text-primary-500 hover:bg-primary-50 rounded"
-                                  title="Criar Exceção"
+                                  className="p-1 text-emerald-500 hover:bg-emerald-50 rounded"
+                                  title="Marcar como Realizado"
                                 >
-                                  <AlertCircle size={14} />
+                                  <CheckCircle2 size={14} />
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDeleteRecurring(recurringSlot.id); }} className="p-1 text-gray-400 hover:text-red-500 rounded"><Trash2 size={14} /></button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation(); handleFinalizeRecurring(recurringSlot, day.toISOString().substring(0, 11) + hour.toString().padStart(2, '0') + ':00:00', 'cancelado');
+                                  }}
+                                  className="p-1 text-red-400 hover:bg-red-50 rounded"
+                                  title="Marcar como Falta"
+                                >
+                                  <XCircle size={14} />
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); handleDeleteRecurring(recurringSlot.id); }} className="p-1 text-gray-400 hover:text-red-500 rounded" title="Remover Horário Fixo"><Trash2 size={14} /></button>
                               </>
                             )}
                           </div>
@@ -500,7 +522,10 @@ export const Agenda: React.FC<{ onNavigate: (view: any, params?: any) => void }>
                 <button
                   onClick={() => {
                     if (selectedAppointment.is_recurring_projection) {
-                      alert("Agendamentos recorrentes projetados não podem ser marcados como realizado diretamente.");
+                      const dateStr = selectedAppointment.date.split('T')[0];
+                      const timeStr = selectedAppointment.start_time || '08:00';
+                      handleFinalizeRecurring(selectedAppointment, `${dateStr}T${timeStr}`, 'realizado');
+                      setSelectedAppointment(null);
                     } else {
                       handleUpdateStatus(selectedAppointment.id, 'realizado');
                       setSelectedAppointment(null);

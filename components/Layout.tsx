@@ -17,7 +17,8 @@ import {
   ChevronRight,
   Sun,
   LogOut,
-  FileBarChart
+  FileBarChart,
+  Brain
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -144,8 +145,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewCha
       {/* Mobile Drawer */}
       <aside className={`fixed inset-y-0 left-0 w-72 bg-white dark:bg-gray-800 z-[70] md:hidden transform transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} shadow-2xl flex flex-col`}>
         <div className="p-6 flex items-center gap-3 border-b border-gray-100 dark:border-gray-700">
-          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm flex-shrink-0">
-            <img src={IMAGES.LOGO} alt="PsicoFlow" className="w-full h-full object-cover" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center shadow-sm flex-shrink-0">
+            <Brain className="text-emerald-600 dark:text-emerald-400" size={24} />
           </div>
           <span className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">PsicoFlow</span>
           <button onClick={() => setIsMobileMenuOpen(false)} className="ml-auto p-2 text-gray-400"><X size={20} /></button>
@@ -166,8 +167,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewCha
       {/* Desktop Sidebar */}
       <aside className={`hidden md:flex flex-col ${isCollapsed ? 'w-20' : 'w-64'} bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-all duration-300 relative`}>
         <div className={`p-6 flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
-          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-sm flex-shrink-0">
-            <img src={IMAGES.LOGO} alt="PsicoFlow" className="w-full h-full object-cover" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center shadow-sm flex-shrink-0">
+            <Brain className="text-emerald-600 dark:text-emerald-400" size={24} />
           </div>
           {!isCollapsed && (
             <span className="text-xl font-bold text-gray-900 dark:text-white tracking-tight animate-fade-in">PsicoFlow</span>
@@ -207,8 +208,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewCha
             >
               <Menu size={24} />
             </button>
-            <div className="md:hidden w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
-              <img src={IMAGES.LOGO} alt="PsicoFlow" className="w-full h-full object-cover" />
+            <div className="md:hidden w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
+              <Brain className="text-emerald-600 dark:text-emerald-400" size={18} />
             </div>
           </div>
 

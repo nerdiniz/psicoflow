@@ -1,30 +1,49 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Filter, Plus, User, Calendar, TrendingUp, MoreVertical, MessageSquare, Mail, Calendar as CalendarIcon, X, Loader2, ClipboardList, Trash2, FileText } from 'lucide-react';
+import { Search, Filter, Plus, User, Calendar, TrendingUp, MoreVertical, MessageSquare, Mail, Calendar as CalendarIcon, X, Loader2, ClipboardList, Trash2, FileText, CreditCard } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { jsPDF } from 'jspdf';
 import { generateAnamnesisPDF } from '../lib/pdfGenerator';
 import { AnamnesisModal } from '../components/AnamnesisModal';
+import { Plan } from '../types';
 
 export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
   const { user } = useAuth();
   const [patients, setPatients] = useState<any[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '' });
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    payment_type: 'particular' as 'particular' | 'plano',
+    plan_id: '',
+    custom_price: '',
+    modality: 'presencial' as 'online' | 'presencial'
+  });
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [isAnamnesisOpen, setIsAnamnesisOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [profile, setProfile] = useState<{ name: string; crp: string } | null>(null);
 
   const lastHandledId = useRef<string | null>(null);
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const isMobile = windowWidth < 1024;
 
   useEffect(() => {
     if (user) {
       fetchPatients();
       fetchProfile();
+      fetchPlans();
     }
   }, [user]);
 
@@ -39,6 +58,20 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
       setProfile(data);
     } catch (err) {
       console.error('Error fetching profile:', err);
+    }
+  }
+
+  async function fetchPlans() {
+    try {
+      const { data, error } = await supabase
+        .from('plans')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('name');
+      if (error) throw error;
+      setPlans(data || []);
+    } catch (error) {
+      console.error('Error fetching plans:', error);
     }
   }
 
@@ -60,7 +93,8 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
         .from('patients')
         .select(`
           *,
-          anamnesis (id)
+          anamnesis (id),
+          plans (name)
         `)
         .order('name');
       if (error) throw error;
@@ -88,9 +122,29 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
     if (!user) return;
     try {
       setIsSubmitting(true);
-      const { error } = await supabase.from('patients').insert([{ ...formData, user_id: user.id }]);
+
+      const payload: any = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        user_id: user.id,
+        payment_type: formData.payment_type,
+        status: 'ativo',
+        modality: formData.modality
+      };
+
+      if (formData.payment_type === 'particular') {
+        payload.custom_price = formData.custom_price ? parseFloat(formData.custom_price.replace(',', '.')) : null;
+        payload.plan_id = null;
+      } else {
+        payload.plan_id = formData.plan_id || null;
+        payload.custom_price = null;
+      }
+
+      const { error } = await supabase.from('patients').insert([payload]);
       if (error) throw error;
-      setFormData({ name: '', email: '', phone: '' });
+
+      setFormData({ name: '', email: '', phone: '', payment_type: 'particular', plan_id: '', custom_price: '', modality: 'presencial' });
       setIsModalOpen(false);
       fetchPatients();
     } catch (err) {
@@ -100,11 +154,17 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
     }
   }
 
+  const newPatientsCount = patients.filter(p => {
+    const date = new Date(p.created_at);
+    const now = new Date();
+    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  }).length;
+
   return (
-    <div className="flex-1 flex flex-col h-full">
+    <div className="flex-1 flex flex-col">
       {/* Header Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div className="relative w-full md:w-96">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-8">
+        <div className="relative w-full lg:w-96 flex-shrink-0">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="text-gray-400" size={18} />
           </div>
@@ -116,10 +176,10 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
             placeholder="Buscar por nome ou email..."
           />
         </div>
-        <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-medium shadow-sm">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-medium shadow-sm">
             <Filter size={18} />
-            Filtros
+            <span className="hidden sm:inline">Filtros</span>
           </button>
           <button
             onClick={() => generateAnamnesisPDF({
@@ -129,14 +189,14 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
               psychologistName: profile?.name || user?.user_metadata?.name,
               crp: profile?.crp
             })}
-            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-medium shadow-sm"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm font-medium shadow-sm"
           >
             <FileText size={18} />
-            Anamnese em Branco
+            <span className="truncate">Anamnese em Branco</span>
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors shadow-md hover:shadow-lg text-sm font-medium"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors shadow-md hover:shadow-lg text-sm font-bold"
           >
             <Plus size={18} />
             Novo Paciente
@@ -145,38 +205,68 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
       </div>
 
       {/* Mini Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <MiniStat label="Total de Pacientes" value={patients.length.toString()} icon={<User size={20} />} color="blue" />
-        <MiniStat label="Sessões na Semana" value="0" icon={<Calendar size={20} />} color="purple" />
-        <MiniStat label="Novos este Mês" value="0" icon={<TrendingUp size={20} />} color="green" />
+        <MiniStat label="Novos este Mês" value={newPatientsCount.toString()} icon={<TrendingUp size={20} />} color="green" />
       </div>
 
       {/* List Container */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden flex-1">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
         {isMobile ? (
-          <div className="p-4 space-y-4">
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
             {loading ? (
-              <div className="py-20 text-center"><Loader2 className="animate-spin text-primary-500 mx-auto" size={32} /></div>
+              <div className="col-span-full py-20 text-center"><Loader2 className="animate-spin text-primary-500 mx-auto" size={32} /></div>
             ) : patients.length === 0 ? (
-              <p className="text-center py-10 text-gray-500">Nenhum paciente cadastrado</p>
+              <p className="col-span-full text-center py-10 text-gray-500">Nenhum paciente cadastrado</p>
             ) : (
               patients
                 .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.email?.toLowerCase().includes(searchTerm.toLowerCase()))
                 .map(patient => (
-                  <div key={patient.id} className="p-4 bg-gray-50 dark:bg-gray-900/30 rounded-2xl border border-gray-100 dark:border-gray-800 flex flex-col gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-primary-100 text-primary-600 flex items-center justify-center font-black">{patient.name.charAt(0)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-gray-900 dark:text-white truncate uppercase">{patient.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{patient.email || patient.phone || 'Sem contato'}</p>
+                  <div key={patient.id} className="p-5 bg-gray-50 dark:bg-gray-900/30 rounded-3xl border border-gray-100 dark:border-gray-800 flex flex-col gap-4 shadow-sm hover:shadow-md transition-all">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-primary-100 text-primary-600 flex items-center justify-center font-black text-lg shadow-sm">{patient.name.charAt(0)}</div>
+                        <div className="min-w-0">
+                          <p className="text-base font-black text-gray-900 dark:text-white truncate uppercase tracking-tight">{patient.name}</p>
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase ${patient.modality === 'online' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30' : 'bg-orange-100 text-orange-600 dark:bg-orange-900/30'}`}>
+                              {patient.modality || 'presencial'}
+                            </span>
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase bg-primary-50 text-primary-600 dark:bg-primary-900/30`}>
+                              {patient.payment_type === 'particular' ? 'Particular' : (patient.plans?.name || 'Convênio')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${patient.status === 'ativo' ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
+                        {patient.status}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 py-3 border-y border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <Mail size={14} className="text-gray-300" />
+                        <span className="truncate">{patient.email || 'Nenhum email'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                        <MessageSquare size={14} className="text-gray-300" />
+                        <span>{patient.phone || 'Nenhum WhatsApp'}</span>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
-                      <span className="text-[10px] font-black uppercase text-gray-400">Ativo</span>
-                      <div className="flex gap-2">
-                        <button onClick={() => { setSelectedPatient(patient); setIsAnamnesisOpen(true); }} className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors border border-primary-100"><ClipboardList size={18} /></button>
-                        <button onClick={() => handleDeletePatient(patient.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors border border-red-100"><Trash2 size={18} /></button>
-                      </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setSelectedPatient(patient); setIsAnamnesisOpen(true); }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 rounded-xl font-bold text-xs"
+                      >
+                        <ClipboardList size={16} /> Anamnese
+                      </button>
+                      <button
+                        onClick={() => handleDeletePatient(patient.id)}
+                        className="px-3 py-2.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-100 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
                 ))
@@ -189,8 +279,8 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
                 <tr>
                   <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Paciente</th>
                   <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Tipo/Plano</th>
-                  <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Última Sessão</th>
                   <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Status</th>
+                  <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Contato</th>
                   <th className="px-6 py-3 text-right text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Ações</th>
                 </tr>
               </thead>
@@ -205,16 +295,9 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
                     .map(patient => (
                       <PatientRow
                         key={patient.id}
-                        name={patient.name}
+                        patient={patient}
                         initials={patient.name.charAt(0).toUpperCase()}
                         initialsColor="bg-primary-100 text-primary-600"
-                        therapy="Terapia Individual"
-                        date="Sem consultas"
-                        status="Ativo"
-                        statusColor="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                        phone={patient.phone}
-                        email={patient.email}
-                        hasAnamnesis={patient.anamnesis && patient.anamnesis.length > 0}
                         onOpenAnamnesis={() => { setSelectedPatient(patient); setIsAnamnesisOpen(true); }}
                         onDelete={() => handleDeletePatient(patient.id)}
                       />
@@ -256,6 +339,72 @@ export const Patients: React.FC<{ patientId?: string }> = ({ patientId }) => {
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">WhatsApp</label>
                 <input type="tel" value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-primary-500" />
               </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Modalidade de Atendimento</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, modality: 'presencial' })}
+                    className={`py-2 px-4 rounded-xl border text-sm font-medium transition-all ${formData.modality === 'presencial' ? 'bg-primary-50 border-primary-500 text-primary-700 dark:bg-primary-900/30' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}
+                  >
+                    Presencial
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, modality: 'online' })}
+                    className={`py-2 px-4 rounded-xl border text-sm font-medium transition-all ${formData.modality === 'online' ? 'bg-primary-50 border-primary-500 text-primary-700 dark:bg-primary-900/30' : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}
+                  >
+                    Online
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Pagamento</label>
+                  <select
+                    value={formData.payment_type}
+                    onChange={e => setFormData({ ...formData, payment_type: e.target.value as 'particular' | 'plano' })}
+                    className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="particular">Particular</option>
+                    <option value="plano">Plano de Saúde</option>
+                  </select>
+                </div>
+
+                {formData.payment_type === 'particular' ? (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Valor da Sessão</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0,00"
+                        value={formData.custom_price}
+                        onChange={e => setFormData({ ...formData, custom_price: e.target.value })}
+                        className="w-full pl-8 pr-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Plano</label>
+                    <select
+                      value={formData.plan_id}
+                      onChange={e => setFormData({ ...formData, plan_id: e.target.value })}
+                      className="w-full px-4 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Selecione...</option>
+                      {plans.map(plan => (
+                        <option key={plan.id} value={plan.id}>{plan.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 rounded-xl font-bold">Cancelar</button>
                 <button type="submit" disabled={isSubmitting} className="flex-1 py-2.5 bg-primary-500 text-white rounded-xl font-bold disabled:opacity-50 transition-all flex items-center justify-center gap-2">
@@ -287,34 +436,46 @@ const MiniStat = ({ label, value, icon, color }: any) => {
   );
 };
 
-const PatientRow = ({ name, initials, initialsColor, therapy, date, status, statusColor, phone, email, hasAnamnesis, onOpenAnamnesis, onDelete }: any) => (
+const PatientRow = ({ patient, initials, initialsColor, onOpenAnamnesis, onDelete }: any) => (
   <tr className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
     <td className="px-6 py-4">
       <div className="flex items-center">
         <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm ${initialsColor}`}>{initials}</div>
         <div className="ml-4">
-          <div className="text-sm font-bold text-gray-900 dark:text-white">{name}</div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">{therapy}</div>
+          <div className="text-sm font-bold text-gray-900 dark:text-white uppercase">{patient.name}</div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${patient.modality === 'online' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30' : 'bg-orange-100 text-orange-600 dark:bg-orange-900/30'}`}>
+              {patient.modality || 'presencial'}
+            </span>
+            <span className="text-[10px] text-gray-400 font-medium">Desde {new Date(patient.created_at).toLocaleDateString()}</span>
+          </div>
         </div>
       </div>
     </td>
-    <td className="px-6 py-4"><div className="flex items-center text-sm text-gray-700 dark:text-gray-300"><CalendarIcon size={16} className="mr-2 text-gray-400" />{date}</div></td>
-    <td className="px-6 py-4"><span className={`px-3 py-1 text-xs font-semibold rounded-full ${statusColor}`}>{status}</span></td>
     <td className="px-6 py-4">
-      <div className="flex items-center gap-4">
-        <div className="flex gap-2">
-          {phone && <a href={`https://wa.me/${phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-green-500"><MessageSquare size={18} /></a>}
-          {email && <a href={`mailto:${email}`} className="text-gray-400 hover:text-blue-500"><Mail size={18} /></a>}
-        </div>
-        <button onClick={onOpenAnamnesis} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${hasAnamnesis ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-primary-50 text-primary-600 border-primary-200'}`}>
-          <ClipboardList size={14} />{hasAnamnesis ? 'Ver Pronto' : 'Anamnese'}
-        </button>
+      <div className="text-sm text-gray-900 dark:text-white font-medium capitalize flex items-center gap-2">
+        {patient.payment_type === 'plano' && <CreditCard size={14} className="text-primary-500" />}
+        {patient.payment_type === 'particular' ? 'Particular' : (patient.plans?.name || 'Convênio')}
+      </div>
+      {patient.payment_type === 'particular' && patient.custom_price && (
+        <div className="text-xs text-gray-500">R$ {patient.custom_price}</div>
+      )}
+    </td>
+    <td className="px-6 py-4"><span className={`px-3 py-1 text-xs font-semibold rounded-full capitalize ${patient.status === 'ativo' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{patient.status}</span></td>
+    <td className="px-6 py-4">
+      <div className="flex items-center gap-3">
+        {patient.phone && <a href={`https://wa.me/${patient.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-green-500"><MessageSquare size={18} /></a>}
+        {patient.email && <a href={`mailto:${patient.email}`} className="text-gray-400 hover:text-blue-500"><Mail size={18} /></a>}
       </div>
     </td>
     <td className="px-6 py-4 text-right">
       <div className="flex items-center justify-end gap-2">
-        <button onClick={onDelete} className="text-gray-400 hover:text-red-500 p-1.5"><Trash2 size={18} /></button>
-        <button className="text-gray-400 hover:text-primary-500 p-1.5"><MoreVertical size={18} /></button>
+        <button onClick={onOpenAnamnesis} className="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors border border-primary-100" title="Anamnese">
+          <ClipboardList size={18} />
+        </button>
+        <button onClick={onDelete} className="text-gray-400 hover:text-red-500 p-2 rounded-lg hover:bg-red-50 transition-colors" title="Excluir">
+          <Trash2 size={18} />
+        </button>
       </div>
     </td>
   </tr>

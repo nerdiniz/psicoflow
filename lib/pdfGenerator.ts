@@ -152,7 +152,7 @@ export const generateAnamnesisPDF = ({ patientName, data, isBlank = false, psych
     });
 
     // Footer
-    const totalPages = doc.internal.getNumberOfPages();
+    const totalPages = doc.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
@@ -269,4 +269,263 @@ export const generateAttendancePDF = ({
     }
 
     doc.save(`Atestado_${patientName.replace(/\s+/g, '_')}.pdf`);
+};
+
+export const generateDischargePDF = ({
+    patientName,
+    summary,
+    evolution,
+    reason,
+    referrals,
+    psychologistName,
+    crp
+}: {
+    patientName: string;
+    summary: string;
+    evolution: string;
+    reason: string;
+    referrals?: string;
+    psychologistName?: string;
+    crp?: string;
+}) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+
+    // --- Branding Header ---
+    doc.setFillColor(16, 185, 129);
+    doc.rect(0, 0, pageWidth, 40, 'F');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PsicoFlow', 20, 20);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Relatório de Alta Terapêutica', 20, 28);
+    if (psychologistName) {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${psychologistName.toUpperCase()}${crp ? ` - CRP: ${crp}` : ''}`, 20, 35);
+    }
+
+    let currentY = 60;
+    doc.setFontSize(14);
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RELATÓRIO DE ALTA', pageWidth / 2, currentY, { align: 'center' });
+    currentY += 20;
+
+    const renderSection = (title: string, content: string) => {
+        if (!content) return;
+        if (currentY > 250) { doc.addPage(); currentY = 30; }
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(16, 185, 129);
+        doc.text(title.toUpperCase(), 20, currentY);
+        currentY += 7;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(51, 65, 85);
+        const splitText = doc.splitTextToSize(content, pageWidth - 40);
+        doc.text(splitText, 20, currentY);
+        currentY += (splitText.length * 6) + 12;
+    };
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 41, 59);
+    doc.text(`Paciente: ${patientName.toUpperCase()}`, 20, currentY);
+    currentY += 15;
+
+    renderSection('Resumo do Processo', summary);
+    renderSection('Evolução Observada', evolution);
+    renderSection('Motivo da Alta', reason);
+    if (referrals) renderSection('Encaminhamentos e Orientações', referrals);
+
+    // Signature Area
+    if (currentY > 230) { doc.addPage(); currentY = 50; }
+    currentY += 20;
+    doc.text(`${dateStr}.`, 20, currentY);
+    currentY += 30;
+    doc.setDrawColor(30, 41, 59);
+    doc.line(pageWidth / 4, currentY, (pageWidth / 4) * 3, currentY);
+    currentY += 7;
+    doc.setFont('helvetica', 'bold');
+    doc.text(psychologistName || 'Psicólogo(a)', pageWidth / 2, currentY, { align: 'center' });
+    if (crp) {
+        currentY += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.text(`CRP: ${crp}`, pageWidth / 2, currentY, { align: 'center' });
+    }
+
+    doc.save(`Alta_${patientName.replace(/\s+/g, '_')}.pdf`);
+};
+
+export const generatePsychologicalReportPDF = ({
+    patientName,
+    purpose,
+    demand,
+    procedure,
+    analysis,
+    conclusion,
+    psychologistName,
+    crp
+}: {
+    patientName: string;
+    purpose: string;
+    demand: string;
+    procedure: string;
+    analysis: string;
+    conclusion: string;
+    psychologistName?: string;
+    crp?: string;
+}) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const dateStr = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+
+    // --- Branding Header ---
+    doc.setFillColor(16, 185, 129);
+    doc.rect(0, 0, pageWidth, 40, 'F');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PsicoFlow', 20, 20);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Laudo Psicológico', 20, 28);
+    if (psychologistName) {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${psychologistName.toUpperCase()}${crp ? ` - CRP: ${crp}` : ''}`, 20, 35);
+    }
+
+    let currentY = 60;
+    doc.setFontSize(14);
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LAUDO PSICOLÓGICO', pageWidth / 2, currentY, { align: 'center' });
+    currentY += 20;
+
+    const renderSection = (title: string, content: string) => {
+        if (currentY > 250) { doc.addPage(); currentY = 30; }
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(16, 185, 129);
+        doc.text(title.toUpperCase(), 20, currentY);
+        currentY += 7;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(51, 65, 85);
+        const splitText = doc.splitTextToSize(content, pageWidth - 40);
+        doc.text(splitText, 20, currentY);
+        currentY += (splitText.length * 6) + 12;
+    };
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`1. IDENTIFICAÇÃO`, 20, currentY);
+    currentY += 7;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`INTERESSADO: ${patientName.toUpperCase()}`, 20, currentY);
+    currentY += 7;
+    doc.text(`AUTORA: ${psychologistName?.toUpperCase() || ''} (CRP: ${crp || ''})`, 20, currentY);
+    currentY += 15;
+
+    renderSection('2. FINALIDADE', purpose);
+    renderSection('3. DESCRIÇÃO DA DEMANDA', demand);
+    renderSection('4. PROCEDIMENTO', procedure);
+    renderSection('5. ANÁLISE', analysis);
+    renderSection('6. CONCLUSÃO', conclusion);
+
+    // Signature Area
+    if (currentY > 230) { doc.addPage(); currentY = 50; }
+    currentY += 20;
+    doc.text(`${dateStr}.`, 20, currentY);
+    currentY += 30;
+    doc.setDrawColor(30, 41, 59);
+    doc.line(pageWidth / 4, currentY, (pageWidth / 4) * 3, currentY);
+    currentY += 7;
+    doc.setFont('helvetica', 'bold');
+    doc.text(psychologistName || 'Psicólogo(a)', pageWidth / 2, currentY, { align: 'center' });
+    if (crp) {
+        currentY += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.text(`CRP: ${crp}`, pageWidth / 2, currentY, { align: 'center' });
+    }
+
+    doc.save(`Laudo_${patientName.replace(/\s+/g, '_')}.pdf`);
+};
+
+export const generateWeeklyProgressPDF = ({
+    patientName,
+    weekGoals,
+    observations,
+    nextSteps,
+    psychologistName,
+    crp
+}: {
+    patientName: string;
+    weekGoals: string;
+    observations: string;
+    nextSteps: string;
+    psychologistName?: string;
+    crp?: string;
+}) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const dateStr = format(new Date(), "dd/MM/yyyy", { locale: ptBR });
+
+    // --- Branding Header ---
+    doc.setFillColor(16, 185, 129);
+    doc.rect(0, 0, pageWidth, 40, 'F');
+    doc.setFontSize(22);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PsicoFlow', 20, 20);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Acompanhamento de Progresso Semanal', 20, 28);
+    if (psychologistName) {
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${psychologistName.toUpperCase()}${crp ? ` - CRP: ${crp}` : ''}`, 20, 35);
+    }
+
+    let currentY = 60;
+    doc.setFontSize(14);
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PROGRESSO SEMANAL', pageWidth / 2, currentY, { align: 'center' });
+    currentY += 20;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`PACIENTE: ${patientName.toUpperCase()}`, 20, currentY);
+    doc.text(`DATA: ${dateStr}`, pageWidth - 20, currentY, { align: 'right' });
+    currentY += 15;
+
+    const renderBox = (title: string, content: string) => {
+        if (currentY > 250) { doc.addPage(); currentY = 30; }
+        doc.setFontSize(10);
+        doc.setTextColor(16, 185, 129);
+        doc.text(title.toUpperCase(), 20, currentY);
+        currentY += 5;
+
+        const splitText = doc.splitTextToSize(content, pageWidth - 50);
+        const boxHeight = (splitText.length * 6) + 10;
+
+        doc.setDrawColor(226, 232, 240);
+        doc.rect(20, currentY, pageWidth - 40, boxHeight);
+
+        doc.setTextColor(51, 65, 85);
+        doc.setFont('helvetica', 'normal');
+        doc.text(splitText, 25, currentY + 7);
+
+        currentY += boxHeight + 15;
+    };
+
+    renderBox('Objetivos da Semana', weekGoals);
+    renderBox('Observações / Progresso', observations);
+    renderBox('Planejamento / Próximos Passos', nextSteps);
+
+    doc.save(`Progresso_${patientName.replace(/\s+/g, '_')}_${dateStr.replace(/\//g, '-')}.pdf`);
 };
